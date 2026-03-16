@@ -5,28 +5,36 @@ export enum EmailStatus {
   FAILED = 'failed',
 }
 export class Email {
-  private id: string;
-  private recipients: string[];
-  private subject: string;
-  private content: string;
-  private status: EmailStatus;
-  private erroMessage?: string;
-  private sendAt?: Date;
-  private createdAt: Date;
+  id: string;
+  recipients: string[];
+  subject: string;
+  content: string;
+  status: EmailStatus;
+  errorMessage?: string;
+  retryCount: number;
+  sentAt?: Date;
+  createdAt: Date;
 
   sentSuccessfully(): boolean {
     return this.status === EmailStatus.SUCCESS;
   }
 
-  markAsSucess() {
+  markAsSuccess() {
     this.status = EmailStatus.SUCCESS;
+    this.sentAt = new Date();
   }
 
   markAsInProgress() {
     this.status = EmailStatus.IN_PROGRESS;
   }
 
-  markAsFailed() {
+  markAsFailed(errorMessage: string) {
     this.status = EmailStatus.FAILED;
+    this.errorMessage = errorMessage;
+    this.retryCount += 1;
+  }
+
+  canRetry(): boolean {
+    return this.retryCount < 3;
   }
 }
