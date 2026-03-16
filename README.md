@@ -1,98 +1,236 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# MailPulse
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+> Reliable email delivery infrastructure : send, track, and retry transactional emails at scale.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+MailPulse is a transactional email service that accepts email requests via a simple REST API, processes them asynchronously through a queue, and handles retries automatically on failure.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## The Problem
 
-## Project setup
+Every app needs to send emails — confirmations, alerts, notifications. But building reliable email delivery is harder than it looks:
 
-```bash
-$ npm install
+- What if the SMTP server is temporarily down?
+- What if the email fails silently?
+- How do you know if an email was actually sent?
+- How do you retry without sending duplicates?
+
+**MailPulse handles all of this so your app doesn't have to.**
+
+---
+
+## How It Works
+
+```
+1. Your app sends a request
+   POST /emails
+   { recipient, subject, html }
+
+2. MailPulse saves it (status: PENDING)
+   → responds immediately with the email ID
+
+3. BullMQ worker picks it up in the background
+   → status: IN_PROGRESS
+   → sends via Gmail SMTP
+
+4. Success → status: SUCCESS, sentAt recorded
+   Failure → retry up to 3 times (exponential backoff)
+           → after 3 failures → status: FAILED (Dead Letter)
+
+5. Your app checks the result anytime
+   GET /emails/:id → { status: "success", sentAt: "..." }
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## Tech Stack
 
-# watch mode
-$ npm run start:dev
+| Layer | Technology |
+|-------|-----------|
+| Framework | NestJS |
+| Database | PostgreSQL + TypeORM |
+| Queue | BullMQ + Redis |
+| Email | Nodemailer (Gmail SMTP) |
+| Architecture | Clean Architecture |
+| Testing | Jest |
+| CI/CD | GitHub Actions |
 
-# production mode
-$ npm run start:prod
+---
+
+## Architecture
+
+```
+src/
+├── modules/
+│   └── email/
+│       ├── domain/
+│       │   ├── email.entity.ts         ← business logic
+│       │   ├── email.repository.ts     ← port
+│       │   └── email.errors.ts
+│       ├── application/
+│       │   ├── send-email.usecase.ts   ← orchestrates everything
+│       │   └── get-email.usecase.ts
+│       ├── infrastructure/
+│       │   ├── persistence/
+│       │   │   ├── email.orm-entity.ts
+│       │   │   └── pg-email.repository.ts
+│       │   ├── queue/
+│       │   │   ├── email.queue.ts      ← BullMQ producer
+│       │   │   └── email.processor.ts  ← BullMQ worker
+│       │   └── mailer/
+│       │       └── nodemailer.service.ts ← Gmail SMTP
+│       └── interface/
+│           ├── email.controller.ts
+│           └── dto/
+│               └── send-email.dto.ts
+└── shared/
+    └── exceptions/
+        └── domain.exception.ts
 ```
 
-## Run tests
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL
+- Redis
+- Gmail account with App Password enabled
+
+### Installation
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+git clone https://github.com/ANDRIANALISOA-sylvere/MailPulse
+cd MailPulse
+npm install
+cp .env.example .env
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Environment Variables
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=mailpulse
+DB_USER=postgres
+DB_PASSWORD=postgres
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Gmail SMTP
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=mailpulse.service@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=MailPulse 
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Run
 
-## Resources
+```bash
+# Development
+npm run start:dev
 
-Check out a few resources that may come in handy when working with NestJS:
+# Docker
+docker-compose up --build
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+---
 
-## Support
+## API
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Send an Email
 
-## Stay in touch
+```bash
+POST /emails
+Content-Type: application/json
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+{
+  "recipient": ["jean@gmail.com"],
+  "subject": "Ride confirmed",
+  "content": "Hello JeanYour ride is confirmed."
+}
+```
 
-## License
+Response:
+```json
+{
+  "id": "uuid",
+  "status": "pending",
+  "createdAt": "2026-03-16T..."
+}
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### Get Email Status
+
+```bash
+GET /emails/:id
+```
+
+Response:
+```json
+{
+  "id": "uuid",
+  "recipient": ["jean@gmail.com"],
+  "subject": "Ride confirmed",
+  "status": "success",
+  "attempts": 1,
+  "sentAt": "2026-03-16T...",
+  "createdAt": "2026-03-16T..."
+}
+```
+
+### Get Email History
+
+```bash
+GET /emails?status=failed&limit=20&page=1
+```
+
+---
+
+## Queue & Retry Logic
+
+```
+Job created → PENDING
+Worker picks up → IN_PROGRESS
+  → Success → SUCCESS
+  → Failure → retry after 2s
+  → Failure → retry after 4s
+  → Failure → retry after 8s
+  → Still failing → FAILED (Dead Letter Queue)
+```
+
+---
+
+## Concepts Applied
+
+- **Clean Architecture** — domain / application / infrastructure / interface
+- **BullMQ** — async job queue with retry and backoff
+- **Dead Letter Queue** — handle permanently failed jobs
+- **Repository Pattern** — swap PostgreSQL without touching business logic
+- **Unit Testing** — test business logic in isolation
+- **CI/CD** — GitHub Actions runs tests on every push
+
+---
+
+<!-- 
+## Roadmap
+
+- [ ] Template support with dynamic variables
+- [ ] Webhook callback when email is delivered
+- [ ] Dashboard to monitor email delivery rates
+- [ ] Support for multiple SMTP providers
+
+---
+-->
+
+## Author
+
+**Sylvère Andrianalisoa** — [@ANDRIANALISOA-sylvere](https://github.com/ANDRIANALISOA-sylvere)
+
+> Built to master BullMQ, Clean Architecture, and production-grade testing.
