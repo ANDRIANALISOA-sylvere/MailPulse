@@ -1,4 +1,4 @@
-import { Email, EmailStatus } from 'src/domain/email.entity';
+import { Email, EmailStatus } from '../../domain/email.entity';
 import {
   Column,
   CreateDateColumn,

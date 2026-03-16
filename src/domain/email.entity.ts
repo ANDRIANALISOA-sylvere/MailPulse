@@ -34,7 +34,7 @@ export class Email {
     this.retryCount += 1;
   }
 
-  canRetry(): boolean {
-    return this.retryCount < 3;
+  canRetry(maxRetries: number = 3): boolean {
+    return this.retryCount < maxRetries;
   }
 }

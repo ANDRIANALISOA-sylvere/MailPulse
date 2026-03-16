@@ -19,7 +19,6 @@ export class PgEmailRepository implements EmailRepository {
   }
 
   async save(email: Email): Promise<void> {
-    const data = this.emailOrmRepo.create(email);
-    await this.emailOrmRepo.save(data);
+    await this.emailOrmRepo.save(email);
   }
 }
